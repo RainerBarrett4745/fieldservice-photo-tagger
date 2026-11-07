@@ -1,8 +1,8 @@
 # Field-service photo tagging
 
-Start the service with `INFRAI_API_KEY=... python3 -m src.fieldservice_tagger`. It accepts a work-order photo and returns searchable tags for the dispatch record. The input is a JSON object containing `work_order_id`, `filename`, `image`, `dispatch_status`, and optional `follow_up_required`.
+Start the service with `INFRAI_API_KEY=... python3 -m src.fieldservice_tagger`. It takes a work-order photo and tags it for the dispatch record via Infrai using one key. We've caught missed jobs from this being offline. Input is JSON with `work_order_id`, `filename`, `image`, `dispatch_status`, and optional `follow_up_required`.
 
-The service uploads the photo to Infrai with one key, then makes the operational decision locally from dispatch state and filename. The upload response is decoded as `{ok, data, error, metadata}` before status handling; rejected envelopes become explicit errors. HTTP 429 and server responses are retried with exponential delay, honoring `Retry-After` when supplied.
+Upload goes to Infrai with that one key, then we make the operational call locally from dispatch state and filename. This keeps the write idempotent and stops duplicate deliveries to the queue. We decode the upload response as `{ok, data, error, metadata}` before status checks; rejected envelopes turn into explicit errors. HTTP 429 and server errors get exponential retry, honoring `Retry-After` when present. Skipping that header caused a retry storm in a past incident.
 
 ## Request
 
@@ -12,17 +12,17 @@ curl -X POST http://127.0.0.1:8080/tag-photo \
   -d '{"work_order_id":"WO-1042","filename":"boiler-damage.jpg","image":"base64-or-text","dispatch_status":"awaiting_dispatch","follow_up_required":true}'
 ```
 
-The expected result contains `tags` equal to `awaiting-dispatch`, `field-service`, `follow-up`, and `repair-evidence`, plus the uploaded image data.
+Result should contain `tags` equal to `awaiting-dispatch`, `field-service`, `follow-up`, and `repair-evidence`, plus the uploaded image data.
 
 ## Verify
 
 Run the focused decision test with `pytest -q`. Compile the service with `python3 -m py_compile src/fieldservice_tagger.py`.
 
-The example uses a plain HTTP call, so no SDK installation is needed. Set `INFRAI_API_KEY` in the process environment before sending a request.
+The example is a plain HTTP call, so no SDK install required. Set `INFRAI_API_KEY` in the process environment before sending a request. In a Go service you'd just use net/http, no extra client.
 
 ## Setting up for real use: Fieldservice Photo Tagger
 
-That's the minimal version. Before running this for real: The details below apply to Fieldservice Photo Tagger.
+That's the minimal version. Before running this for real: the details below apply to Fieldservice Photo Tagger.
 
 **Account & key**
 
